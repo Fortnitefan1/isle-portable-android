@@ -1,32 +1,38 @@
-name: Build Android APK
+name: Build LEGO Island APK (NDK + SDL3)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Set up JDK
-      uses: actions/setup-java@v3
-      with:
-        java-version: 17
-        distribution: 'zulu'
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install ninja-build unzip
 
-    - name: Set up Android SDK
-      uses: android-actions/setup-android@v2
+    - name: Set up Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r26b
+
+    - name: Download SDL3 for Android
+      run: |
+        curl -LO https://github.com/libsdl-org/SDL/releases/download/release-3.0.0/SDL3-android.zip
+        unzip SDL3-android.zip -d SDL3
 
     - name: Build APK
       run: |
-        ./gradlew assembleRelease
+        cd SDL3/android-project
+        mkdir -p app/jni
+        cp -r ../../../* app/jni/
+        ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v3
       with:
         name: isle-portable.apk
-        path: app/build/outputs/apk/release/app-release.apk
+        path: SDL3/android-project/app/build/outputs/apk/debug/app-debug.apk
