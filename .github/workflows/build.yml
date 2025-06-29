@@ -12,17 +12,16 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install ninja-build unzip
+      run: sudo apt-get update && sudo apt-get install ninja-build
 
     - name: Set up Android NDK
       uses: nttld/setup-ndk@v1
       with:
         ndk-version: r26b
 
-    - name: Download SDL3 for Android
+    - name: Clone SDL3 Android project
       run: |
-        curl -LO https://github.com/libsdl-org/SDL/releases/download/release-3.0.0/SDL3-android.zip
-        unzip SDL3-android.zip -d SDL3
+        git clone --depth=1 --branch main https://github.com/libsdl-org/SDL SDL3
 
     - name: Build APK
       run: |
