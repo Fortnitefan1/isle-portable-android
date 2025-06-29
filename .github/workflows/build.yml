@@ -32,7 +32,7 @@ jobs:
         ./gradlew assembleDebug
 
     - name: Upload APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: isle-portable.apk
         path: SDL3/android-project/app/build/outputs/apk/debug/app-debug.apk
