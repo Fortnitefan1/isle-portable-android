@@ -11,7 +11,7 @@ jobs:
     - name: 📥 Checkout source
       uses: actions/checkout@v3
 
-    - name: 🧰 Install build dependencies
+    - name: 🧰 Install Ninja for Gradle (if needed)
       run: sudo apt-get update && sudo apt-get install -y ninja-build
 
     - name: 📦 Set up Android NDK
@@ -19,62 +19,128 @@ jobs:
       with:
         ndk-version: r26b
 
-    - name: 🧱 Clone SDL3
-      run: git clone --depth=1 --branch main https://github.com/libsdl-org/SDL SDL3
-
-   - name: 📂 Inject source + SDL3 into build
+    - name: 📥 Clone SDL3 (latest)
       run: |
-        mkdir -p SDL3/android-project/app/jni/app/src/SDL3
-        mkdir -p SDL3/android-project/app/jni/app/src/isle
+        git clone --depth=1 https://github.com/libsdl-org/SDL SDL3
 
-        # Copy SDL3, excluding the android-project directory
-        rsync -av --exclude 'android-project' SDL3/ SDL3/android-project/app/jni/app/src/SDL3/
-
-        # Copy your own game source (excluding .git, .github, SDL3 again)
-        shopt -s extglob
-        cp -r !(SDL3|.git|.github|.gitignore) SDL3/android-project/app/jni/app/src/isle/
-
-    - name: 📝 Write custom Android.mk
+    - name: 🧹 Prepare source layout
       run: |
-        cat << 'EOF' > SDL3/android-project/app/jni/Android.mk
+        mkdir -p android-project/app/jni/src/SDL3
+        mkdir -p android-project/app/jni/src/game
+        rsync -a SDL3/ android-project/app/jni/src/SDL3/ --exclude android-project
+        rsync -a . android-project/app/jni/src/game/ --exclude .git --exclude .github --exclude SDL3
+
+    - name: 📝 Write Android.mk
+      run: |
+        cat << 'EOF' > android-project/app/jni/Android.mk
         LOCAL_PATH := $(call my-dir)
 
-        # SDL3 static library
+        # SDL3
         include $(CLEAR_VARS)
         LOCAL_MODULE := SDL3
-        SDL3_SRC := $(wildcard $(LOCAL_PATH)/app/src/SDL3/src/*.c)
+        SDL3_SRC := $(wildcard $(LOCAL_PATH)/src/SDL3/src/*.c)
         LOCAL_SRC_FILES := $(SDL3_SRC:$(LOCAL_PATH)/%=%)
-        LOCAL_C_INCLUDES := $(LOCAL_PATH)/app/src/SDL3/include
-        LOCAL_CFLAGS := -DUSING_SDL3
+        LOCAL_C_INCLUDES := $(LOCAL_PATH)/src/SDL3/include
         include $(BUILD_STATIC_LIBRARY)
 
-        # Your game
+        # Game
         include $(CLEAR_VARS)
         LOCAL_MODULE := main
-        GAME_SRC := $(wildcard $(LOCAL_PATH)/app/src/isle/*.cpp)
+        GAME_SRC := $(wildcard $(LOCAL_PATH)/src/game/*.cpp)
         LOCAL_SRC_FILES := $(GAME_SRC:$(LOCAL_PATH)/%=%)
-        LOCAL_C_INCLUDES := \
-            $(LOCAL_PATH)/app/src/SDL3/include \
-            $(LOCAL_PATH)/app/src/isle
+        LOCAL_C_INCLUDES := $(LOCAL_PATH)/src/SDL3/include $(LOCAL_PATH)/src/game
         LOCAL_STATIC_LIBRARIES := SDL3
         include $(BUILD_SHARED_LIBRARY)
         EOF
 
     - name: 📝 Write Application.mk
       run: |
-        cat << 'EOF' > SDL3/android-project/app/jni/Application.mk
+        cat << 'EOF' > android-project/app/jni/Application.mk
         APP_ABI := arm64-v8a
         APP_PLATFORM := android-21
         APP_STL := c++_static
         EOF
 
+    - name: 🧱 Create Gradle files
+      run: |
+        cd android-project
+        cat <<EOF > settings.gradle
+        include ':app'
+        EOF
+
+        mkdir -p app
+        cat <<EOF > app/build.gradle
+        apply plugin: 'com.android.application'
+
+        android {
+            compileSdkVersion 34
+            defaultConfig {
+                applicationId "org.isle.portable"
+                minSdkVersion 21
+                targetSdkVersion 34
+                ndk {
+                    abiFilters 'arm64-v8a'
+                }
+            }
+            externalNativeBuild {
+                ndkBuild {
+                    path "app/jni/Android.mk"
+                }
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+            }
+        }
+
+        dependencies {}
+        EOF
+
+        cat <<EOF > build.gradle
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:8.2.0'
+            }
+        }
+
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        EOF
+
+        mkdir -p app/src/main
+        cat <<EOF > app/src/main/AndroidManifest.xml
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="org.isle.portable">
+            <application android:label="LEGO Island" android:hasCode="true" android:allowBackup="true">
+                <activity android:name="org.libsdl.app.SDLActivity"
+                          android:label="LEGO Island"
+                          android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+                          android:launchMode="singleTop">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
     - name: 📲 Build APK
       run: |
-        cd SDL3/android-project
+        cd android-project
         ./gradlew assembleDebug
 
     - name: 📤 Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: isle-portable.apk
-        path: SDL3/android-project/app/build/outputs/apk/debug/app-debug.apk
+        name: lego-island-android-apk
+        path: android-project/app/build/outputs/apk/debug/app-debug.apk
