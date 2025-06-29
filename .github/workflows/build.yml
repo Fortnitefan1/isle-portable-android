@@ -22,12 +22,17 @@ jobs:
     - name: 🧱 Clone SDL3
       run: git clone --depth=1 --branch main https://github.com/libsdl-org/SDL SDL3
 
-    - name: 📂 Inject source + SDL3 into build
+   - name: 📂 Inject source + SDL3 into build
       run: |
         mkdir -p SDL3/android-project/app/jni/app/src/SDL3
-        cp -r SDL3/* SDL3/android-project/app/jni/app/src/SDL3/
         mkdir -p SDL3/android-project/app/jni/app/src/isle
-        cp -r . SDL3/android-project/app/jni/app/src/isle/
+
+        # Copy SDL3, excluding the android-project directory
+        rsync -av --exclude 'android-project' SDL3/ SDL3/android-project/app/jni/app/src/SDL3/
+
+        # Copy your own game source (excluding .git, .github, SDL3 again)
+        shopt -s extglob
+        cp -r !(SDL3|.git|.github|.gitignore) SDL3/android-project/app/jni/app/src/isle/
 
     - name: 📝 Write custom Android.mk
       run: |
