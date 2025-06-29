@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 📥 Checkout this repo
+    - name: 📥 Checkout your game code
       uses: actions/checkout@v3
 
     - name: 🧰 Install build dependencies
@@ -19,13 +19,14 @@ jobs:
       with:
         ndk-version: r26b
 
-    - name: 🧱 Clone SDL3 Android wrapper
+    - name: 🧱 Clone SDL3 Android shell
       run: git clone --depth=1 --branch main https://github.com/libsdl-org/SDL SDL3
 
-    - name: 📂 Copy your game source into Android project
+    - name: 📂 Copy source files (skip SDL3 & .github)
       run: |
         mkdir -p SDL3/android-project/app/jni/src
-        cp -r . SDL3/android-project/app/jni/src/
+        shopt -s extglob
+        cp -r !(SDL3|.github|.git|.gitignore) SDL3/android-project/app/jni/src/
 
     - name: 📲 Build APK
       run: |
